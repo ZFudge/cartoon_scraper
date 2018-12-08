@@ -16,7 +16,7 @@ import logging
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
 
 def soup_request(url):
-	logging.info("Requesting {}\n".format(url))
+	logging.info("Requesting content from {}".format(url))
 	r = requests.get(url)
 	if r.status_code == 200:
 		return BeautifulSoup(r.content, 'html.parser')
@@ -66,14 +66,19 @@ def landing_loop(scripts):
 		if len(str(script).split('", "')) > 170:
 			return get_vars(str(script))
 
-def get_episodes(show_name, start_season, seasons, start_episode, episodes):
-	logging.info("{}: season{}, episodes{}\n".format(show_name, " "+str(start_season) if seasons == 1  else "s "+str(start_season)+"-"+str(start_season+seasons-1), " "+str(start_episode) if episodes == 1  else "s "+str(start_episode)+"-"+str(start_episode+episodes-1)))
-	show_directory(show_name)
+def get_episodes(series, start_season, seasons, start_episode, episodes):
+	logging.info("{}: season{}, episode{}\n".format(series, " "+str(start_season) if seasons == 1  else "s "+str(start_season)+"-"+str(start_season+seasons-1), " "+str(start_episode) if episodes == 1  else "s "+str(start_episode)+"-"+str(start_episode+episodes-1)))
+	show_directory(series)
+	b = ['aA==', 'dA==', 'dA==', 'cA==', 'cw==', 'Og==', 'Lw==', 'Lw==', 'dw==', 'dw==', 'dw==', 'Lg==', 'dw==', 'YQ==', 'dA==', 'Yw==', 'aA==', 'Yw==', 'YQ==', 'cg==', 'dA==', 'bw==', 'bw==', 'bg==', 'bw==', 'bg==', 'bA==', 'aQ==', 'bg==', 'ZQ==', 'Lg==', 'aQ==', 'bw==', 'Lw==']
+	base_url = ''
+	for s in b:
+	    base_url += base64.b64decode(s)
 	url_1 = '{}{}-season-{}-episode-{}'
 	show = {
-		"show_name": show_name,
+		"series": series,
 		"episodes" : [],
-		"began": str(datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S'))
+		"started": str(datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S')),
+		"begin": timer()
 	}
 	for season in range(start_season, start_season + seasons):
 		for episode in range(start_episode, start_episode + episodes):
@@ -83,16 +88,17 @@ def get_episodes(show_name, start_season, seasons, start_episode, episodes):
 				"requested": str(datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S'))
 			}
 			logging.info("Season {} Episode {}\n".format(season, episode))
-			first_soup = soup_request(url_1.format(url_base, show_name, season, episode))
+			first_soup = soup_request(url_1.format(base_url, series, season, episode))
 			try:
 				landing_scripts = first_soup.select("script")
+				logging.info("Received iframe\n")
 			except:
 				logging.error("Returned status code {}\n\n".format(first_soup))
 				episode_dict['url'] = url_1
 				episode_dict['error_landing'] = first_soup
 				continue				
 			iframe = landing_loop(landing_scripts)
-			url_2 = "https://www.watchcartoononline.io{}".format(iframe[3])
+			url_2 = "{}{}".format(base_url[:-1], iframe[3])
 			try:
 				name = url_2[url_2.index("{}.".format(episode)) + 2 : -1 * (len(url_2[url_2.index("{}.".format(episode))+2:]) - re.search("[0-9]", url_2[url_2.index("{}.".format(episode))+2:]).start())]
 			except Exception as e:
@@ -102,6 +108,7 @@ def get_episodes(show_name, start_season, seasons, start_episode, episodes):
 			second_soup = soup_request(url_2)
 			try:
 				video_scripts = second_soup.select("script")
+				logging.info("Received video hosting endpoint\n")
 			except:
 				logging.error("Returned status code {}\n\n".format(first_soup))
 				episode_dict['url'] = url_2
@@ -109,7 +116,7 @@ def get_episodes(show_name, start_season, seasons, start_episode, episodes):
 				continue
 			url_3 = iframe_looper(video_scripts)
 			episode_dict["url"] = url_3.replace("lbb.", "media4.")
-			episode_dict["file_name"] = "{}.{}-{}_{}.mp4".format(season, episode, show_name, name)
+			episode_dict["file_name"] = "{}.{}_{}_{}.mp4".format(season, episode, series, name)
 			episode_dict = write_mp4(episode_dict)
 			show["episodes"].append(episode_dict)
 	return show
@@ -120,20 +127,22 @@ def write_mp4(episode):
 		response = urllib2.urlopen(episode["url"])
 		with open(episode['file_name'], 'wb') as f:
 			start = timer()
-			logging.info("Writing {}\n{}".format(episode["file_name"], datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S')))
+			logging.info("Writing {}\n{}\nThis may take hella minutes".format(episode["file_name"], datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S')))
 			f.write(response.read())
-			end = timer()
-			episode["time_elapsed"] = end - start
-			logging.info("Writing completed in {} seconds\n\n".format(episode["time_elapsed"]))
+			stop = timer()
+			episode["time_elapsed"] = str(datetime.timedelta(0, stop - start))[:-4]
+			logging.info("Writing completed. Elapsed time: {}\n\n".format(episode["time_elapsed"]))
 	except Exception as e:
 		logging.error("Error writing {}\n{}\n\n".format(episode["file_name"], e))
 		episode["error_mp4"] = str(e)
-		pass
 	return episode
 
 def log_data(data):
-	data["ended"] = str(datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S'))
-	log_name = "cartoon_logs.json"
+	data["stopped"] = str(datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S'))
+	end = timer()
+	data["time_elapsed"] = str(datetime.timedelta(0, end - data["begin"]))[:-4]
+	del data["begin"]
+	log_name = "scrape_logs.json"
 	logging.info("Changing to parent directory")
 	os.chdir("..")
 	append = True
@@ -154,8 +163,6 @@ def log_data(data):
 		f.write("\n]")
 	logging.info("Goodbye")
 
-url_base = "https://www.watchcartoononline.io/"
-
 if __name__ == '__main__':
-	shows_data = get_episodes('', 10, 1, 8, 1)
+	shows_data = get_episodes("", 2, 1, 8, 3)
 	log_data(shows_data)

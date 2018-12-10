@@ -24,6 +24,7 @@ def soup_request(url):
 		return r.status_code
 
 def show_directory(show):
+	show = show.replace("-", "_")
 	if not os.path.exists(show):
 		logging.info("Creating {} directory".format(show))
 		os.makedirs(show)
@@ -123,7 +124,7 @@ def get_episodes(series, start_season, seasons, start_episode, episodes):
 
 def write_mp4(episode):
 	try:
-		logging.info("Retrieving mp4 from {}\n".format(episode["url"]))
+		logging.info("Requesting mp4 from {}\n".format(episode["url"]))
 		response = urllib2.urlopen(episode["url"])
 		with open(episode['file_name'], 'wb') as f:
 			start = timer()
@@ -146,7 +147,7 @@ def log_data(data):
 	logging.info("Changing to parent directory")
 	os.chdir("..")
 	append = True
-	if not os.path.exists("./{}".format(log_name)):
+	if not os.path.isfile(log_name):
 		with open(log_name, "w") as f:
 			append = False
 	with open(log_name, "r+") as f:
@@ -164,5 +165,5 @@ def log_data(data):
 	logging.info("Goodbye")
 
 if __name__ == '__main__':
-	shows_data = get_episodes("", 2, 1, 8, 3)
+	shows_data = get_episodes("", 4, 1, 4, 5)
 	log_data(shows_data)
